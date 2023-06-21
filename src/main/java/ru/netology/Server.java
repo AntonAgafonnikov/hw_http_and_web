@@ -9,6 +9,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -19,12 +21,31 @@ public class Server {
             "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html",
             "/events.html", "/events.js");
     private final static ExecutorService threadPool = Executors.newFixedThreadPool(NUMBER_THREADS);
+    private ConcurrentMap<ConcurrentMap<String, String>, Handler> handlers = new ConcurrentHashMap<>();
 
-    public static void startServer() throws IOException {
+    public void startServer() throws IOException, InterruptedException {
         try (final var serverSocket = new ServerSocket(PORT)) {
+            //TODO
+            System.out.println("SIZE = " + handlers.size());
+            for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
+                ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
+                for (ConcurrentMap.Entry<String, String> entry : nestedMap.entrySet()) {
+                    if ("GET".equals(entry.getKey())) {
+                        if ("/messages".equals(entry.getValue())) {
+                            System.out.println("ОНИ ТАМ ЕСТЬ!");
+                        } else {
+                            System.out.println("ИХ ТАМ НЕТ!");
+                        }
+                    } else {
+                        System.out.println("ТУТ БЛЯТЬ ДАЖ ГЕТА НЕТУ");
+                    }
+                }
+            }
+            //TODO
             while (true) {
                 try (var waitingConnection = serverSocket.accept()) {
                     threadPool.execute(connectionProcessing(serverSocket));
+                    Thread.sleep(30);
                 } catch (IOException e) {
                     threadPool.shutdown();
                     e.printStackTrace();
@@ -34,7 +55,7 @@ public class Server {
         }
     }
 
-    public static Runnable connectionProcessing(ServerSocket serverSocket) throws IOException {
+    public Runnable connectionProcessing(ServerSocket serverSocket) throws IOException {
         return () -> {
             try (var socket = serverSocket.accept()) {
                 var in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
@@ -47,6 +68,18 @@ public class Server {
                     in.close();
                     out.close();
                     return;
+                }
+
+                Request request = new Request(parts[0], parts[1], parts[2]); //TODO
+                for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
+                    ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
+                    for (ConcurrentMap.Entry<String, String> entry : nestedMap.entrySet()) {
+                        if (request.method.equals(entry.getKey())) {
+                            if (request.headers.equals(entry.getValue())) {
+                                entryMapHandler.getValue().handle(request, out);
+                            }
+                        }
+                    }
                 }
 
                 final var path = parts[1];
@@ -103,5 +136,21 @@ public class Server {
                 e.printStackTrace();
             }
         };
+    }
+
+    public void addHandler(String method, String path, Handler handler) {
+        ConcurrentMap<String, String> methodAndPathMap = new ConcurrentHashMap<>();
+        methodAndPathMap.put(method, path);
+
+        for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
+            ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
+            for (ConcurrentMap.Entry<String, String> entryStringString : nestedMap.entrySet()) {
+                if (!method.equals(entryStringString.getKey())) {
+                    if (!path.equals(entryStringString.getValue())) {
+                        handlers.put(methodAndPathMap, handler);
+                    }
+                }
+            }
+        }
     }
 }
