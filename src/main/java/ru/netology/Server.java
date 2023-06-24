@@ -21,29 +21,12 @@ public class Server {
             "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html",
             "/events.html", "/events.js");
     private final static ExecutorService threadPool = Executors.newFixedThreadPool(NUMBER_THREADS);
-    private ConcurrentMap<ConcurrentMap<String, String>, Handler> handlers = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConcurrentMap<String, String>, Handler> handlers = new ConcurrentHashMap<>();
 
     public void startServer() throws IOException, InterruptedException {
         try (final var serverSocket = new ServerSocket(PORT)) {
-            //TODO
-            System.out.println("SIZE = " + handlers.size());
-            for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
-                ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
-                for (ConcurrentMap.Entry<String, String> entry : nestedMap.entrySet()) {
-                    if ("GET".equals(entry.getKey())) {
-                        if ("/messages".equals(entry.getValue())) {
-                            System.out.println("ОНИ ТАМ ЕСТЬ!");
-                        } else {
-                            System.out.println("ИХ ТАМ НЕТ!");
-                        }
-                    } else {
-                        System.out.println("ТУТ БЛЯТЬ ДАЖ ГЕТА НЕТУ");
-                    }
-                }
-            }
-            //TODO
             while (true) {
-                try (var waitingConnection = serverSocket.accept()) {
+                try (var ignored = serverSocket.accept()) {
                     threadPool.execute(connectionProcessing(serverSocket));
                     Thread.sleep(30);
                 } catch (IOException e) {
@@ -70,19 +53,19 @@ public class Server {
                     return;
                 }
 
-                Request request = new Request(parts[0], parts[1], parts[2]); //TODO
+                Request request = new Request(parts[0], parts[1], parts[2]);
                 for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
                     ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
                     for (ConcurrentMap.Entry<String, String> entry : nestedMap.entrySet()) {
-                        if (request.method.equals(entry.getKey())) {
-                            if (request.headers.equals(entry.getValue())) {
+                        if (request.getMethod().equals(entry.getKey())) {
+                            if (request.getHeaders().equals(entry.getValue())) {
                                 entryMapHandler.getValue().handle(request, out);
                             }
                         }
                     }
                 }
 
-                final var path = parts[1];
+                final var path = request.getHeaders();
                 if (!validPaths.contains(path)) {
                     out.write((
                             "HTTP/1.1 404 Not Found\r\n" +
@@ -142,10 +125,21 @@ public class Server {
         ConcurrentMap<String, String> methodAndPathMap = new ConcurrentHashMap<>();
         methodAndPathMap.put(method, path);
 
+        if (handlers.size() == 0) {
+            handlers.put(methodAndPathMap, handler);
+            return;
+        }
+
+        // Пробегаемся по внутренней мапе.
+        // Если хэндлера для такого набора "метод-путь" нет, то добавляем его
         for (ConcurrentMap.Entry<ConcurrentMap<String, String>, Handler> entryMapHandler : handlers.entrySet()) {
             ConcurrentMap<String, String> nestedMap = entryMapHandler.getKey();
+
             for (ConcurrentMap.Entry<String, String> entryStringString : nestedMap.entrySet()) {
                 if (!method.equals(entryStringString.getKey())) {
+                    handlers.put(methodAndPathMap, handler);
+                    return;
+                } else {
                     if (!path.equals(entryStringString.getValue())) {
                         handlers.put(methodAndPathMap, handler);
                     }
