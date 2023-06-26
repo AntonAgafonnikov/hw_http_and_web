@@ -53,7 +53,7 @@ public class Request {
                 .collect(Collectors.toList());
     }
 
-    public void createRequest(BufferedInputStream in) {
+    private void createRequest(BufferedInputStream in) {
         // лимит на request line + заголовки
         final var limit = 4096;
 

@@ -28,7 +28,7 @@ public class Server {
         }
     }
 
-    public Runnable connectionProcessing(ServerSocket serverSocket) throws IOException {
+    private Runnable connectionProcessing(ServerSocket serverSocket) throws IOException {
         return () -> {
             try (
                     final var socket = serverSocket.accept();
