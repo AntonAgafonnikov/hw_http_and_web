@@ -8,6 +8,7 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class Request {
@@ -15,8 +16,9 @@ public class Request {
     private String path;
     private String version;
     private List<String> headers;
-    private String body;
+    private ConcurrentHashMap<String, List<String>> body = new ConcurrentHashMap<String, List<String>>();
     private List<NameValuePair> queryParams;
+    private String typeRequest = "";
 
     public Request(BufferedInputStream in) {
         createRequest(in);
@@ -38,7 +40,7 @@ public class Request {
         return headers;
     }
 
-    public String getBody() {
+    public ConcurrentHashMap<String, List<String>> getBody() {
         return body;
     }
 
@@ -51,6 +53,17 @@ public class Request {
                 .stream()
                 .filter(o -> Objects.equals(o.getName(), name))
                 .collect(Collectors.toList());
+    }
+
+    public String getTypeRequest() {
+        return typeRequest;
+    }
+    public List<String> getPostParam(String name) {
+        return this.body.get(name);
+    }
+    public Map<String, List<String>> getPostParams() {
+
+        return this.body;
     }
 
     private void createRequest(BufferedInputStream in) {
@@ -79,6 +92,7 @@ public class Request {
             this.path = pathAndQuery.split("\\?")[0];
         }
         // Используем библиотеку Apache для парсинга
+        //System.out.println(">>>>>>"+pathAndQuery);
         try {
             this.queryParams = new URIBuilder(pathAndQuery).getQueryParams();
         } catch (URISyntaxException e) {
@@ -112,8 +126,15 @@ public class Request {
         }
         this.headers = Arrays.asList(new String(headersBytes).split("\r\n"));
 
+        List<String> listHeaders = this.getHeaders();
+        for (String headers : listHeaders) {
+            if(headers.startsWith("Content-Type")) {
+                typeRequest = headers.substring(14);
+            }
+        }
+
         // для GET тела нет
-        String body = null;
+        String bodyURI = null;
         if (!method.equals("GET")) {
             try {
                 in.skip(headersDelimiter.length);
@@ -130,11 +151,28 @@ public class Request {
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
-
-                body = new String(bodyBytes);
+                if(typeRequest.equals("application/x-www-form-urlencoded")) {
+                    bodyURI = "/?" + new String(bodyBytes);
+                    List<NameValuePair> bodyValuePair;
+                    try {
+                        bodyValuePair = new URIBuilder(bodyURI).getQueryParams();
+                    } catch (URISyntaxException e) {
+                        throw new RuntimeException(e);
+                    }
+                    if (bodyValuePair != null) {
+                        for (NameValuePair item : bodyValuePair) {
+                            if (!body.containsKey(item.getName())) {
+                                body.put(item.getName(), new ArrayList<>());
+                                body.get(item.getName()).add(item.getValue());
+                            } else {
+                                body.get(item.getName()).add(item.getValue());
+                            }
+                        }
+                    }
+                }
             }
         }
-        this.body = body;
+
     }
 
     private static Optional<String> extractHeader(List<String> headers, String header) {

@@ -2,10 +2,13 @@ package ru.netology;
 
 import java.io.*;
 import java.net.ServerSocket;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class Server {
     public static final int PORT = 9999;
@@ -47,8 +50,23 @@ public class Server {
                         }
                     }
                 }
+
                 //Вывод запроса в консоль
+                System.out.println("Query:");
                 request.getQueryParams().forEach(System.out::println);
+
+                if(request.getTypeRequest().equals("application/x-www-form-urlencoded")) {
+                    if (request.getPostParams() == null) {
+                        System.out.println("У запроса нет тела!");
+                    } else {
+                        System.out.println("Body:");
+                        for (String name : request.getPostParams().keySet()) {
+                            String key = name;
+                            String value = request.getPostParams().get(name).toString();
+                            System.out.println(key + " = " + value);
+                        }
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
